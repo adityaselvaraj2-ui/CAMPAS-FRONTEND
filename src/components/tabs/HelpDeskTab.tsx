@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Phone, Clock, Users, Bus, HeartPulse, FileText, RotateCcw, HelpCircle } from 'lucide-react';
+import { Send, Phone, Clock, Users, Bus, HeartPulse, FileText, RotateCcw, HelpCircle, Loader2 } from 'lucide-react';
+import { sendChatMessage } from '../../lib/api';
 
 type CampusProp = 'SJCE' | 'SJIT' | 'CIT' | 'KPR' | null;
 
@@ -135,6 +136,7 @@ const HelpDeskTab = ({ campus }: HelpDeskTabProps) => {
   const [messages, setMessages] = useState<Message[]>([{ from: 'bot', text: welcomeMsg }]);
   const [input, setInput] = useState('');
   const [flipped, setFlipped] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -158,14 +160,29 @@ const HelpDeskTab = ({ campus }: HelpDeskTabProps) => {
   const badge = BADGE_COLORS[campus];
   const quickQuestions = QUICK_CHIPS[campus];
 
-  const handleSend = (text?: string) => {
+  const handleSend = async (text?: string) => {
     const msg = text || input.trim();
-    if (!msg) return;
+    if (!msg || !campus) return;
+    
     const userMsg: Message = { from: 'user', text: msg };
-    const botMsg: Message = { from: 'bot', text: matchQuery(msg, campus) };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
-    setTimeout(() => setMessages(prev => [...prev, botMsg]), 400);
+    setIsLoading(true);
+
+    try {
+      const response = await sendChatMessage(msg, campus);
+      const botMsg: Message = { from: 'bot', text: response.reply };
+      setMessages(prev => [...prev, botMsg]);
+    } catch (error) {
+      console.error('Chat API error:', error);
+      const fallbackMsg: Message = { 
+        from: 'bot', 
+        text: "Sorry, I'm having trouble connecting right now. Please try again or contact the help desk directly." 
+      };
+      setMessages(prev => [...prev, fallbackMsg]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const flipCards = [
@@ -364,7 +381,8 @@ const HelpDeskTab = ({ campus }: HelpDeskTabProps) => {
               <button
                 key={q}
                 onClick={() => handleSend(q)}
-                className="px-3 py-1.5 rounded-full text-[10px] font-ui tracking-wider border border-primary/30 text-muted-foreground hover:bg-primary/10 hover:text-foreground hover:-translate-y-0.5 active:translate-y-0 transition-all"
+                disabled={isLoading}
+                className="px-3 py-1.5 rounded-full text-[10px] font-ui tracking-wider border border-primary/30 text-muted-foreground hover:bg-primary/10 hover:text-foreground hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {q}
               </button>
@@ -381,10 +399,11 @@ const HelpDeskTab = ({ campus }: HelpDeskTabProps) => {
             />
             <button
               onClick={() => handleSend()}
+              disabled={isLoading}
               aria-label="Send message"
-              className="h-12 w-12 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/30 hover:-translate-y-0.5 active:translate-y-0 transition-all"
+              className="h-12 w-12 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary hover:bg-primary/30 hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Send className="w-4 h-4" />
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </button>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Campus } from '@/data/campusData';
-import { ChevronRight, ChevronLeft, Send } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Send, Loader2 } from 'lucide-react';
+import { submitFeedback } from '../../lib/api';
 
 const departments = ['CSE', 'ECE', 'MECH', 'CIVIL', 'IT'];
 const years = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
@@ -50,6 +51,8 @@ const FeedbackTab = ({ campus }: FeedbackTabProps) => {
   const [moodValue, setMoodValue] = useState(3);
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [analyticsTab, setAnalyticsTab] = useState<'gauge' | 'rankings' | 'words'>('gauge');
 
   const moodIdx = Math.min(Math.round(moodValue / 5 * 5), 5);
@@ -61,17 +64,43 @@ const FeedbackTab = ({ campus }: FeedbackTabProps) => {
     []
   );
 
-  const handleSubmit = () => {
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      setStep(0);
-      setDept('');
-      setYear('');
-      setComment('');
-      setMoodValue(3);
-      setSelectedBuilding('');
-    }, 3000);
+  const handleSubmit = async () => {
+    if (!selectedBuilding) {
+      setError('Please select a building');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      await submitFeedback({
+        campus: campus.name,
+        department: dept,
+        year: year,
+        anonymous: anonymous,
+        building: selectedBuilding,
+        mood: moodValue,
+        comment: comment
+      });
+
+      setSubmitted(true);
+      setTimeout(() => {
+        setSubmitted(false);
+        setStep(0);
+        setDept('');
+        setYear('');
+        setComment('');
+        setMoodValue(3);
+        setSelectedBuilding('');
+        setAnonymous(false);
+      }, 3000);
+    } catch (error) {
+      console.error('Feedback submission error:', error);
+      setError('Failed to submit feedback. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const steps = [
@@ -203,12 +232,16 @@ const FeedbackTab = ({ campus }: FeedbackTabProps) => {
             <p className="text-text-2"><span className="text-text-3">Rating:</span> {moodEmojis[moodIdx]} {moodLabels[moodIdx]}</p>
             {comment && <p className="text-text-2"><span className="text-text-3">Comment:</span> {comment.slice(0, 80)}...</p>}
           </div>
+          {error && (
+            <div className="text-red-400 text-xs text-center mb-4">{error}</div>
+          )}
           <button
             onClick={handleSubmit}
-            className="px-8 py-3 rounded-xl bg-primary/20 text-primary border border-primary/30 font-ui text-xs tracking-widest hover:bg-primary/30 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-2 mx-auto"
+            disabled={isLoading || submitted}
+            className="px-8 py-3 rounded-xl bg-primary/20 text-primary border border-primary/30 font-ui text-xs tracking-widest hover:bg-primary/30 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Send className="w-4 h-4" />
-            SUBMIT FEEDBACK
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {isLoading ? 'SUBMITTING...' : submitted ? 'SUBMITTED!' : 'SUBMIT FEEDBACK'}
           </button>
         </>
       )}
