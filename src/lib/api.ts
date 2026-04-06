@@ -1,4 +1,7 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const BASE_URL = import.meta.env.VITE_API_URL || 
+  (import.meta.env.MODE === 'production' 
+    ? 'https://campass-backend.onrender.com/api' 
+    : 'http://localhost:5000/api');
 
 // Helper function with timeout and retry
 async function fetchWithTimeout(url: string, options: RequestInit, timeout = 30000, retries = 2): Promise<Response> {
