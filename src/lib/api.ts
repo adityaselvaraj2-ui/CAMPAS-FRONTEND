@@ -26,6 +26,12 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeout = 300
   throw new Error('Max retries exceeded');
 }
 
+// Open Google Maps navigation
+function openGoogleMapsNavigation(mapsQuery: string) {
+  const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(mapsQuery)}`;
+  window.open(url, '_blank');
+}
+
 export async function submitFeedback(data: {
   campus: string;
   department: string;
@@ -44,12 +50,29 @@ export async function submitFeedback(data: {
   return res.json();
 }
 
-export async function sendChatMessage(message: string, campus: string): Promise<{ reply: string }> {
+export async function sendChatMessage(message: string, campus: string): Promise<{ 
+  reply: string; 
+  action?: 'chat' | 'navigate' | 'info';
+  destination?: {
+    name: string;
+    mapsQuery: string;
+    coordinates?: string;
+    key: string;
+  };
+}> {
   const res = await fetchWithTimeout(`${BASE_URL}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, campus }),
   });
   if (!res.ok) throw new Error('Chat request failed');
-  return res.json();
+  
+  const response = await res.json();
+  
+  // If navigation action, open Google Maps
+  if (response.action === 'navigate' && response.destination?.mapsQuery) {
+    openGoogleMapsNavigation(response.destination.mapsQuery);
+  }
+  
+  return response;
 }

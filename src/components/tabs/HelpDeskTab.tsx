@@ -1,11 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Phone, Clock, Users, Bus, HeartPulse, FileText, RotateCcw, HelpCircle, Loader2 } from 'lucide-react';
+import { Send, Phone, Clock, Users, Bus, HeartPulse, FileText, RotateCcw, HelpCircle, Loader2, Navigation, ExternalLink } from 'lucide-react';
 import { sendChatMessage } from '../../lib/api';
 
 type CampusProp = 'SJCE' | 'SJIT' | 'CIT' | 'KPR' | null;
 
 interface HelpDeskTabProps {
   campus: CampusProp;
+}
+
+interface Message { 
+  from: 'user' | 'bot'; 
+  text: string; 
+  action?: 'chat' | 'navigate' | 'info';
+  destination?: {
+    name: string;
+    mapsQuery: string;
+    coordinates?: string;
+    key: string;
+  };
 }
 
 const FAQ_COMMON: Record<string, string> = {
@@ -171,7 +183,12 @@ const HelpDeskTab = ({ campus }: HelpDeskTabProps) => {
 
     try {
       const response = await sendChatMessage(msg, campus);
-      const botMsg: Message = { from: 'bot', text: response.reply };
+      const botMsg: Message = { 
+        from: 'bot', 
+        text: response.reply,
+        action: response.action,
+        destination: response.destination
+      };
       setMessages(prev => [...prev, botMsg]);
     } catch (error) {
       console.error('Chat API error:', error);
@@ -183,6 +200,12 @@ const HelpDeskTab = ({ campus }: HelpDeskTabProps) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Function to open Google Maps navigation
+  const openNavigation = (mapsQuery: string) => {
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(mapsQuery)}`;
+    window.open(url, '_blank');
   };
 
   const flipCards = [
@@ -364,12 +387,32 @@ const HelpDeskTab = ({ campus }: HelpDeskTabProps) => {
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'} animate-fade-up`}
                    style={{ animationDelay: `${i * 0.05}s` }}>
-                <div className={`max-w-[80%] px-4 py-3 rounded-xl text-sm ${
-                  msg.from === 'user'
-                    ? 'bg-primary/20 border border-primary/30 text-foreground'
-                    : 'glass border border-border text-foreground'
-                }`}>
-                  {msg.text}
+                <div className={`max-w-[80%] ${msg.from === 'bot' && msg.destination ? 'space-y-2' : ''}`}>
+                  <div className={`px-4 py-3 rounded-xl text-sm ${
+                    msg.from === 'user'
+                      ? 'bg-primary/20 border border-primary/30 text-foreground'
+                      : 'glass border border-border text-foreground'
+                  }`}>
+                    {msg.text}
+                  </div>
+                  {msg.from === 'bot' && msg.destination && (
+                    <div className="flex gap-2 ml-4">
+                      <button
+                        onClick={() => openNavigation(msg.destination!.mapsQuery)}
+                        className="px-3 py-2 rounded-lg bg-primary/20 border border-primary/30 text-primary text-xs flex items-center gap-1 hover:bg-primary/30 transition-colors"
+                      >
+                        <Navigation className="w-3 h-3" />
+                        Navigate
+                      </button>
+                      <button
+                        onClick={() => openNavigation(msg.destination!.mapsQuery)}
+                        className="px-3 py-2 rounded-lg bg-muted/50 border border-border text-muted-foreground text-xs flex items-center gap-1 hover:bg-muted/70 transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Maps
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
