@@ -1,6 +1,6 @@
 const BASE_URL = import.meta.env.VITE_API_URL || 
   (import.meta.env.MODE === 'production' 
-    ? 'https://campass-backend.onrender.com/api' 
+    ? 'https://campass-backend-c82n.onrender.com/api' 
     : 'http://localhost:5000/api');
 
 // Helper function with timeout and retry
