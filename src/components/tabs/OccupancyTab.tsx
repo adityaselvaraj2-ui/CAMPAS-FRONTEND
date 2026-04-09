@@ -58,12 +58,12 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
   }, [campus]);
 
   const detectLocationAndCount = async () => {
-    // Check if visitor was counted recently
-    if (hasBeenCountedRecently()) {
-      // Load existing occupancy data
-      loadExistingOccupancy();
-      return;
-    }
+    // Always try to detect location (remove cooldown for testing)
+    // if (hasBeenCountedRecently()) {
+    //   // Load existing occupancy data
+    //   loadExistingOccupancy();
+    //   return;
+    // }
 
     if (!navigator.geolocation) {
       // Fallback: count to most popular building based on time
