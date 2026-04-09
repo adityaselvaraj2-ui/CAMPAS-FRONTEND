@@ -130,8 +130,43 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
   const countVisitorInBuilding = async (building: any) => {
     const visitorId = getVisitorId();
     
-    // Use local storage directly (bypass database issues)
-    await countVisitorInLocalStorage(building);
+    try {
+      // Call backend to count this visitor (database should work now)
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/occupancy/checkin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId: visitorId,
+          buildingId: building.id,
+          campus: campus.id.toUpperCase()
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Database response:', result);
+        
+        // Mark as counted
+        localStorage.setItem('lastCounted', Date.now().toString());
+        setHasCounted(true);
+        setGpsStatus(`Counted in ${building.name}`);
+        
+        // Load updated occupancy from database
+        loadExistingOccupancy();
+        
+        console.log(`Visitor counted in ${building.name} via database`);
+      } else {
+        console.log('Database failed, using local storage');
+        // Fallback to local storage
+        await countVisitorInLocalStorage(building);
+      }
+    } catch (error) {
+      console.log('Backend error, using local storage');
+      // Fallback to local storage
+      await countVisitorInLocalStorage(building);
+    }
   };
 
   const countVisitorInLocalStorage = async (building: any) => {
@@ -150,8 +185,24 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
   };
 
   const loadExistingOccupancy = async () => {
-    // Use local storage directly (bypass database)
-    loadFromLocalStorage();
+    try {
+      // Try database first (like feedback works)
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/occupancy/current?campus=${campus.id.toUpperCase()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setOccupancy(data.occupancy || {});
+        setGpsStatus('Database loaded');
+        console.log('Loaded from database:', data.occupancy);
+      } else {
+        // Fallback to local storage
+        console.log('Database failed, using local storage');
+        loadFromLocalStorage();
+      }
+    } catch (error) {
+      // Fallback to local storage
+      console.log('Database error, using local storage');
+      loadFromLocalStorage();
+    }
   };
 
   const loadFromLocalStorage = () => {
