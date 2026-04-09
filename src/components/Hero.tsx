@@ -175,7 +175,7 @@ const Hero = ({ onSelectCampus, hoveredCampus, onHoverCampus }: HeroProps) => {
 
         {/* Subtitle */}
         <p className="animate-fade-up font-body text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10" style={{ animationDelay: '0.8s' }}>
-          The spatial digital twin of South India's premier engineering campuses.
+          The spatial digital twin of South India's premier engineering campuses — SJCE, SJIT, CIT & KPR.
           <br className="hidden sm:block" />
           Navigate. Discover. Never get lost.
         </p>
