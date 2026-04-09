@@ -337,6 +337,38 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
         </div>
       </div>
 
+      {/* GPS Debug Panel */}
+      <div className="glass-card p-4 border-2 border-red-500 bg-red-500/10">
+        <h3 className="font-bold text-red-400 mb-2">🛰️ GPS DEBUG</h3>
+        <div className="space-y-2 mb-3">
+          <p className="text-sm text-muted-foreground">
+            Status: {gpsStatus}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Campus: {campus.name} (ID: {campus.id})
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Buildings: {campus.buildings.length} available
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Has counted: {hasCounted ? 'YES' : 'NO'}
+          </p>
+        </div>
+        <button 
+          onClick={() => {
+            console.log('🔴 MANUAL GPS TRIGGER');
+            setHasCounted(false); // Reset to force GPS
+            detectLocationAndCount();
+          }}
+          className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors w-full"
+        >
+          🔴 FORCE GPS DETECTION
+        </button>
+        <p className="text-xs text-red-400 mt-2">
+          Click this to manually trigger GPS (check console for logs)
+        </p>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {campus.buildings.map((building, i) => {
           const count = occupancy[building.id] || 0;
