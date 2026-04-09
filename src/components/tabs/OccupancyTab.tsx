@@ -29,20 +29,143 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
   const [occupancy, setOccupancy] = useState<Record<string, number>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
   const [hasCounted, setHasCounted] = useState(false);
+  const [gpsStatus, setGpsStatus] = useState('Detecting location...');
 
-  // Automatic counting - count +1 when user visits
+  // Silent GPS detection - works automatically in background
   useEffect(() => {
     if (!hasCounted && campus.buildings.length > 0) {
-      // Count user as being in a random building (for demo)
-      const randomBuilding = campus.buildings[Math.floor(Math.random() * campus.buildings.length)];
-      const newOccupancy = { ...occupancy };
-      newOccupancy[randomBuilding.id] = (newOccupancy[randomBuilding.id] || 0) + 1;
-      setOccupancy(newOccupancy);
-      setHasCounted(true);
-      
-      console.log(`User counted in ${randomBuilding.name}`);
+      detectLocationAndCount();
     }
-  }, [hasCounted, campus, occupancy]);
+  }, [hasCounted, campus]);
+
+  const detectLocationAndCount = async () => {
+    if (!navigator.geolocation) {
+      // Fallback: count to most popular building based on time
+      fallbackCounting();
+      return;
+    }
+
+    try {
+      setGpsStatus('Getting location...');
+      
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 300000 // 5 minutes cache
+        });
+      });
+
+      const { latitude, longitude } = position;
+      setGpsStatus('Detecting building...');
+      
+      // Find which building user is in
+      const building = findNearestBuilding(latitude, longitude);
+      
+      if (building) {
+        // Count user in the detected building
+        const newOccupancy = { ...occupancy };
+        newOccupancy[building.id] = (newOccupancy[building.id] || 0) + 1;
+        setOccupancy(newOccupancy);
+        setHasCounted(true);
+        setGpsStatus(`Detected: ${building.name}`);
+        
+        console.log(`User automatically counted in ${building.name} via GPS`);
+        
+        // Set up silent tracking for building changes
+        setupSilentTracking();
+      } else {
+        // User is not near any campus building
+        fallbackCounting();
+      }
+      
+    } catch (error) {
+      // GPS failed, use fallback
+      fallbackCounting();
+    }
+  };
+
+  const findNearestBuilding = (lat: number, lon: number) => {
+    let nearestBuilding = null;
+    let minDistance = Infinity;
+    
+    for (const building of campus.buildings) {
+      const distance = calculateDistance(lat, lon, building.lat, building.lng);
+      if (distance < minDistance && distance <= 100) { // 100 meter radius
+        minDistance = distance;
+        nearestBuilding = building;
+      }
+    }
+    
+    return nearestBuilding;
+  };
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371000; // Earth's radius in meters
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // Distance in meters
+  };
+
+  const setupSilentTracking = () => {
+    // Watch for position changes every 30 seconds
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const building = findNearestBuilding(position.coords.latitude, position.coords.longitude);
+        if (building) {
+          setGpsStatus(`In: ${building.name}`);
+        }
+      },
+      null, // Silent error handling
+      {
+        enableHighAccuracy: false, // Save battery
+        timeout: 10000,
+        maximumAge: 600000 // 10 minutes cache
+      }
+    );
+  };
+
+  const fallbackCounting = () => {
+    // Smart fallback based on time of day
+    const hour = new Date().getHours();
+    let targetBuilding;
+    
+    if (hour >= 9 && hour <= 12) {
+      // Morning: Library or Admin Block
+      targetBuilding = campus.buildings.find(b => b.id === 'library') || 
+                      campus.buildings.find(b => b.id === 'admin_block');
+    } else if (hour >= 12 && hour <= 14) {
+      // Lunch: Canteen
+      targetBuilding = campus.buildings.find(b => b.id === 'canteen');
+    } else if (hour >= 14 && hour <= 17) {
+      // Afternoon: Lab Block
+      targetBuilding = campus.buildings.find(b => b.id === 'lab_block');
+    } else {
+      // Other times: Library
+      targetBuilding = campus.buildings.find(b => b.id === 'library');
+    }
+    
+    // Fallback to first building if specific one not found
+    if (!targetBuilding) {
+      targetBuilding = campus.buildings[0];
+    }
+    
+    const newOccupancy = { ...occupancy };
+    newOccupancy[targetBuilding.id] = (newOccupancy[targetBuilding.id] || 0) + 1;
+    setOccupancy(newOccupancy);
+    setHasCounted(true);
+    setGpsStatus(`Estimated: ${targetBuilding.name}`);
+    
+    console.log(`User counted in ${targetBuilding.name} via smart fallback`);
+  };
 
   const generate = useCallback(() => {
     const hour = new Date().getHours();
@@ -75,7 +198,7 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="font-display text-lg font-bold text-foreground">Live Occupancy</h2>
-          <p className="text-text-3 text-xs mt-1">{campus.shortName} · Updated every 60s</p>
+          <p className="text-text-3 text-xs mt-1">{campus.shortName} · {gpsStatus}</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-aurora-3 status-open" />
