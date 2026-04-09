@@ -151,25 +151,15 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
         setOccupancy(data.occupancy || {});
         setGpsStatus('Live data loaded');
       } else {
-        // Fallback to generated data
-        generateMockData();
+        // No fake data - show zero if backend fails
+        setOccupancy({});
+        setGpsStatus('Backend unavailable');
       }
     } catch (error) {
-      // Fallback to generated data
-      generateMockData();
+      // No fake data - show zero if backend fails
+      setOccupancy({});
+      setGpsStatus('No connection to backend');
     }
-  };
-
-  const generateMockData = () => {
-    const hour = new Date().getHours();
-    const weight = getTimeWeight(hour);
-    const data: Record<string, number> = {};
-    campus.buildings.forEach(b => {
-      const cap = b.capacity || 100;
-      data[b.id] = Math.round(cap * weight * (0.5 + Math.random() * 0.6));
-    });
-    setOccupancy(data);
-    setGpsStatus('Using estimated data');
   };
 
   const findNearestBuilding = (lat: number, lon: number) => {
@@ -253,21 +243,26 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
   };
 
   const generate = useCallback(() => {
-    const hour = new Date().getHours();
-    const weight = getTimeWeight(hour);
-    const data: Record<string, number> = {};
-    campus.buildings.forEach(b => {
-      const cap = b.capacity || 100;
-      data[b.id] = Math.round(cap * weight * (0.5 + Math.random() * 0.6));
-    });
-    return data;
-  }, [campus]);
+    // No fake data generation - return empty object
+    return {};
+  }, []);
 
+  // Real-time data refresh every 30 seconds
   useEffect(() => {
-    setOccupancy(generate());
-    const id = setInterval(() => setOccupancy(generate()), 60000);
-    return () => clearInterval(id);
-  }, [generate]);
+    // Initial load
+    if (campus.buildings.length > 0) {
+      loadExistingOccupancy();
+    }
+
+    // Refresh every 30 seconds
+    const interval = setInterval(() => {
+      if (campus.buildings.length > 0) {
+        loadExistingOccupancy();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [campus]);
 
   // Sparkline data (24 hours)
   const getSparkline = useCallback((cap: number) => {
