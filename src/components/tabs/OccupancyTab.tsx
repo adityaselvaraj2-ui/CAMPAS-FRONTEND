@@ -28,9 +28,8 @@ function getCrowdLabel(ratio: number): { label: string; color: string } {
 const OccupancyTab = ({ campus }: OccupancyTabProps) => {
   const [occupancy, setOccupancy] = useState<Record<string, number>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [gpsStatus, setGpsStatus] = useState('Detecting location...');
-  const [gpsCoords, setGpsCoords] = useState<{lat: number, lng: number, accuracy: number} | null>(null);
   const [hasCounted, setHasCounted] = useState(false);
+  const [gpsStatus, setGpsStatus] = useState('Detecting location...');
 
   // Generate unique ID for each visitor
   const getVisitorId = () => {
@@ -96,7 +95,6 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
 
       const { latitude, longitude, accuracy } = position.coords;
       console.log(`📍 Got position: ${latitude}, ${longitude} (accuracy: ±${accuracy}m)`);
-      setGpsCoords({ lat: latitude, lng: longitude, accuracy });
       setGpsStatus(`Got location: ±${accuracy}m`);
       
       // Find which building user is in
@@ -340,69 +338,6 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
           <div className="w-2 h-2 rounded-full bg-aurora-3 status-open" />
           <span className="font-mono text-xs text-text-3">LIVE</span>
         </div>
-      </div>
-
-      {/* GPS Debug Panel */}
-      <div className="glass-card p-4 border-2 border-red-500 bg-red-500/10">
-        <h3 className="font-bold text-red-400 mb-2">🛰️ GPS DEBUG</h3>
-        <div className="space-y-2 mb-3">
-          <p className="text-sm text-muted-foreground">
-            Status: {gpsStatus}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Campus: {campus.name} (ID: {campus.id})
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Buildings: {campus.buildings.length} available
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Has counted: {hasCounted ? 'YES' : 'NO'}
-          </p>
-          {gpsCoords && (
-            <>
-              <p className="text-xs text-muted-foreground">
-                GPS: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Accuracy: ±{gpsCoords.accuracy.toFixed(0)}m
-              </p>
-            </>
-          )}
-        </div>
-        <button 
-          onClick={() => {
-            console.log('🔴 MANUAL GPS TRIGGER');
-            setHasCounted(false); // Reset to force GPS
-            detectLocationAndCount();
-          }}
-          className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors w-full mb-2"
-        >
-          🔴 FORCE GPS DETECTION
-        </button>
-        
-        <div className="mb-2">
-          <label className="text-xs text-red-400 mb-1 block">Manual Override (if GPS wrong):</label>
-          <select 
-            onChange={(e) => {
-              const building = campus.buildings.find(b => b.id === e.target.value);
-              if (building) {
-                console.log('🔧 Manual override:', building.name);
-                setHasCounted(false);
-                countVisitorInBuilding(building);
-              }
-            }}
-            className="w-full px-2 py-1 text-xs bg-white/10 border border-red-500 rounded text-white"
-          >
-            <option value="">Select building manually</option>
-            {campus.buildings.map(b => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
-        </div>
-        
-        <p className="text-xs text-red-400">
-          GPS detected wrong building? Select manually above
-        </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
