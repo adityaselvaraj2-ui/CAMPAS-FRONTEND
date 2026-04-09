@@ -63,7 +63,7 @@ const Navbar = () => {
 
         {/* Campus labels */}
         <div className="hidden md:flex items-center gap-6 font-ui text-xs tracking-widest">
-          {['SJCE', 'SJIT', 'CIT'].map((label) => (
+          {['SJCE', 'SJIT', 'CIT', 'KPR'].map((label) => (
             <span key={label} className="text-muted-foreground/40 hover:text-muted-foreground transition-colors cursor-default">{label}</span>
           ))}
         </div>
