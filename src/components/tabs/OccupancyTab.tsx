@@ -151,8 +151,10 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
         setHasCounted(true);
         setGpsStatus(`Counted in ${building.name}`);
         
-        // Load updated occupancy from database
-        loadExistingOccupancy();
+        // Wait a moment for database to update, then load
+        setTimeout(() => {
+          loadExistingOccupancy();
+        }, 500);
         
         console.log(`Visitor counted in ${building.name} via database`);
       } else {
@@ -184,13 +186,16 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
 
   const loadExistingOccupancy = async () => {
     try {
+      console.log('🔍 Loading occupancy from database for campus:', campus.id.toUpperCase());
       // Try database first (like feedback works)
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/occupancy/current?campus=${campus.id.toUpperCase()}`);
+      console.log('📡 Database response status:', response.status);
       if (response.ok) {
         const data = await response.json();
+        console.log('📊 Database response data:', data);
         setOccupancy(data.occupancy || {});
         setGpsStatus('Database loaded');
-        console.log('Loaded from database:', data.occupancy);
+        console.log('✅ Loaded from database:', data.occupancy);
       } else {
         // Fallback to local storage
         console.log('Database failed, using local storage');
