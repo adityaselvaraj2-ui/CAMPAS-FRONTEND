@@ -28,17 +28,43 @@ function getCrowdLabel(ratio: number): { label: string; color: string } {
 const OccupancyTab = ({ campus }: OccupancyTabProps) => {
   const [occupancy, setOccupancy] = useState<Record<string, number>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [hasCounted, setHasCounted] = useState(false);
   const [gpsStatus, setGpsStatus] = useState('Detecting location...');
+  const [hasCounted, setHasCounted] = useState(false);
+
+  // Generate unique ID for each visitor
+  const getVisitorId = () => {
+    let visitorId = localStorage.getItem('visitorId');
+    if (!visitorId) {
+      visitorId = 'visitor_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('visitorId', visitorId);
+    }
+    return visitorId;
+  };
+
+  // Check if this visitor has been counted in the last 30 minutes
+  const hasBeenCountedRecently = () => {
+    const lastCounted = localStorage.getItem('lastCounted');
+    if (!lastCounted) return false;
+    
+    const timeDiff = Date.now() - parseInt(lastCounted);
+    return timeDiff < 30 * 60 * 1000; // 30 minutes
+  };
 
   // Silent GPS detection - works automatically in background
   useEffect(() => {
-    if (!hasCounted && campus.buildings.length > 0) {
+    if (campus.buildings.length > 0) {
       detectLocationAndCount();
     }
-  }, [hasCounted, campus]);
+  }, [campus]);
 
   const detectLocationAndCount = async () => {
+    // Check if visitor was counted recently
+    if (hasBeenCountedRecently()) {
+      // Load existing occupancy data
+      loadExistingOccupancy();
+      return;
+    }
+
     if (!navigator.geolocation) {
       // Fallback: count to most popular building based on time
       fallbackCounting();
@@ -63,14 +89,11 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
       const building = findNearestBuilding(latitude, longitude);
       
       if (building) {
-        // Count user in the detected building
-        const newOccupancy = { ...occupancy };
-        newOccupancy[building.id] = (newOccupancy[building.id] || 0) + 1;
-        setOccupancy(newOccupancy);
-        setHasCounted(true);
+        // Count this visitor in the detected building
+        await countVisitorInBuilding(building);
         setGpsStatus(`Detected: ${building.name}`);
         
-        console.log(`User automatically counted in ${building.name} via GPS`);
+        console.log(`Visitor counted in ${building.name} via GPS`);
         
         // Set up silent tracking for building changes
         setupSilentTracking();
@@ -83,6 +106,70 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
       // GPS failed, use fallback
       fallbackCounting();
     }
+  };
+
+  const countVisitorInBuilding = async (building: any) => {
+    const visitorId = getVisitorId();
+    
+    try {
+      // Call backend to count this visitor
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/occupancy/checkin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId: visitorId,
+          buildingId: building.id,
+          action: 'enter',
+          campus: campus.id.toUpperCase()
+        })
+      });
+
+      if (response.ok) {
+        // Mark as counted
+        localStorage.setItem('lastCounted', Date.now().toString());
+        setHasCounted(true);
+        
+        // Load updated occupancy
+        loadExistingOccupancy();
+      } else {
+        // Fallback to local counting
+        fallbackCounting();
+      }
+    } catch (error) {
+      // Backend not available, use local counting
+      fallbackCounting();
+    }
+  };
+
+  const loadExistingOccupancy = async () => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/occupancy/current?campus=${campus.id.toUpperCase()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setOccupancy(data.occupancy || {});
+        setGpsStatus('Live data loaded');
+      } else {
+        // Fallback to generated data
+        generateMockData();
+      }
+    } catch (error) {
+      // Fallback to generated data
+      generateMockData();
+    }
+  };
+
+  const generateMockData = () => {
+    const hour = new Date().getHours();
+    const weight = getTimeWeight(hour);
+    const data: Record<string, number> = {};
+    campus.buildings.forEach(b => {
+      const cap = b.capacity || 100;
+      data[b.id] = Math.round(cap * weight * (0.5 + Math.random() * 0.6));
+    });
+    setOccupancy(data);
+    setGpsStatus('Using estimated data');
   };
 
   const findNearestBuilding = (lat: number, lon: number) => {
@@ -133,7 +220,7 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
     );
   };
 
-  const fallbackCounting = () => {
+  const fallbackCounting = async () => {
     // Smart fallback based on time of day
     const hour = new Date().getHours();
     let targetBuilding;
@@ -158,13 +245,11 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
       targetBuilding = campus.buildings[0];
     }
     
-    const newOccupancy = { ...occupancy };
-    newOccupancy[targetBuilding.id] = (newOccupancy[targetBuilding.id] || 0) + 1;
-    setOccupancy(newOccupancy);
-    setHasCounted(true);
+    // Count via backend
+    await countVisitorInBuilding(targetBuilding);
     setGpsStatus(`Estimated: ${targetBuilding.name}`);
     
-    console.log(`User counted in ${targetBuilding.name} via smart fallback`);
+    console.log(`Visitor counted in ${targetBuilding.name} via smart fallback`);
   };
 
   const generate = useCallback(() => {
