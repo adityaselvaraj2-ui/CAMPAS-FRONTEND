@@ -82,7 +82,7 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
         });
       });
 
-      const { latitude, longitude } = position;
+      const { latitude, longitude } = position.coords;
       setGpsStatus('Detecting building...');
       
       // Find which building user is in
@@ -111,54 +111,45 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
   const countVisitorInBuilding = async (building: any) => {
     const visitorId = getVisitorId();
     
+    // Simple local storage approach for now
     try {
-      // Call backend to count this visitor
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/occupancy/checkin`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sessionId: visitorId,
-          buildingId: building.id,
-          action: 'enter',
-          campus: campus.id.toUpperCase()
-        })
-      });
-
-      if (response.ok) {
-        // Mark as counted
-        localStorage.setItem('lastCounted', Date.now().toString());
-        setHasCounted(true);
-        
-        // Load updated occupancy
-        loadExistingOccupancy();
-      } else {
-        // Fallback to local counting
-        fallbackCounting();
-      }
+      // Get current occupancy from local storage
+      const storageKey = `occupancy_${campus.id}`;
+      let currentOccupancy = JSON.parse(localStorage.getItem(storageKey) || '{}');
+      
+      // Add this visitor to the building
+      currentOccupancy[building.id] = (currentOccupancy[building.id] || 0) + 1;
+      
+      // Save to local storage
+      localStorage.setItem(storageKey, JSON.stringify(currentOccupancy));
+      
+      // Update state
+      setOccupancy(currentOccupancy);
+      setHasCounted(true);
+      setGpsStatus(`Counted in ${building.name}`);
+      
+      console.log(`Visitor counted in ${building.name} via local storage`);
+      
+      // Mark as counted
+      localStorage.setItem('lastCounted', Date.now().toString());
+      
     } catch (error) {
-      // Backend not available, use local counting
-      fallbackCounting();
+      console.error('Failed to count visitor:', error);
+      setGpsStatus('Counting failed');
     }
   };
 
   const loadExistingOccupancy = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/occupancy/current?campus=${campus.id.toUpperCase()}`);
-      if (response.ok) {
-        const data = await response.json();
-        setOccupancy(data.occupancy || {});
-        setGpsStatus('Live data loaded');
-      } else {
-        // No fake data - show zero if backend fails
-        setOccupancy({});
-        setGpsStatus('Backend unavailable');
-      }
+      // Load from local storage instead of backend
+      const storageKey = `occupancy_${campus.id}`;
+      const storedOccupancy = JSON.parse(localStorage.getItem(storageKey) || '{}');
+      setOccupancy(storedOccupancy);
+      setGpsStatus('Local data loaded');
     } catch (error) {
-      // No fake data - show zero if backend fails
+      // Fallback to empty data
       setOccupancy({});
-      setGpsStatus('No connection to backend');
+      setGpsStatus('No local data');
     }
   };
 
@@ -235,7 +226,7 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
       targetBuilding = campus.buildings[0];
     }
     
-    // Count via backend
+    // Count via local storage
     await countVisitorInBuilding(targetBuilding);
     setGpsStatus(`Estimated: ${targetBuilding.name}`);
     
