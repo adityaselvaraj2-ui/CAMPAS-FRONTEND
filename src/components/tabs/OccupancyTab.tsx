@@ -29,6 +29,7 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
   const [occupancy, setOccupancy] = useState<Record<string, number>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
   const [gpsStatus, setGpsStatus] = useState('Detecting location...');
+  const [gpsCoords, setGpsCoords] = useState<{lat: number, lng: number, accuracy: number} | null>(null);
   const [hasCounted, setHasCounted] = useState(false);
 
   // Generate unique ID for each visitor
@@ -95,6 +96,7 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
 
       const { latitude, longitude, accuracy } = position.coords;
       console.log(`📍 Got position: ${latitude}, ${longitude} (accuracy: ±${accuracy}m)`);
+      setGpsCoords({ lat: latitude, lng: longitude, accuracy });
       setGpsStatus(`Got location: ±${accuracy}m`);
       
       // Find which building user is in
@@ -128,41 +130,8 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
   const countVisitorInBuilding = async (building: any) => {
     const visitorId = getVisitorId();
     
-    try {
-      // Call backend to count this visitor (database should work now)
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/occupancy/checkin`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sessionId: visitorId,
-          buildingId: building.id,
-          action: 'enter',
-          campus: campus.id.toUpperCase()
-        })
-      });
-
-      if (response.ok) {
-        // Mark as counted
-        localStorage.setItem('lastCounted', Date.now().toString());
-        setHasCounted(true);
-        setGpsStatus(`Counted in ${building.name}`);
-        
-        // Load updated occupancy from database
-        loadExistingOccupancy();
-        
-        console.log(`Visitor counted in ${building.name} via database`);
-      } else {
-        console.log('Database failed, using local storage');
-        // Fallback to local storage
-        await countVisitorInLocalStorage(building);
-      }
-    } catch (error) {
-      console.log('Backend error, using local storage');
-      // Fallback to local storage
-      await countVisitorInLocalStorage(building);
-    }
+    // Use local storage directly (bypass database issues)
+    await countVisitorInLocalStorage(building);
   };
 
   const countVisitorInLocalStorage = async (building: any) => {
@@ -181,23 +150,8 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
   };
 
   const loadExistingOccupancy = async () => {
-    try {
-      // Try database first (RLS should be fixed now)
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/occupancy/current?campus=${campus.id.toUpperCase()}`);
-      if (response.ok) {
-        const data = await response.json();
-        setOccupancy(data.occupancy || {});
-        setGpsStatus('Database loaded');
-        console.log('Loaded from database:', data.occupancy);
-      } else {
-        // Fallback to local storage
-        loadFromLocalStorage();
-      }
-    } catch (error) {
-      // Fallback to local storage
-      console.log('Database error, using local storage');
-      loadFromLocalStorage();
-    }
+    // Use local storage directly (bypass database)
+    loadFromLocalStorage();
   };
 
   const loadFromLocalStorage = () => {
@@ -353,6 +307,16 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
           <p className="text-xs text-muted-foreground">
             Has counted: {hasCounted ? 'YES' : 'NO'}
           </p>
+          {gpsCoords && (
+            <>
+              <p className="text-xs text-muted-foreground">
+                GPS: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Accuracy: ±{gpsCoords.accuracy.toFixed(0)}m
+              </p>
+            </>
+          )}
         </div>
         <button 
           onClick={() => {
@@ -360,12 +324,33 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
             setHasCounted(false); // Reset to force GPS
             detectLocationAndCount();
           }}
-          className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors w-full"
+          className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors w-full mb-2"
         >
           🔴 FORCE GPS DETECTION
         </button>
-        <p className="text-xs text-red-400 mt-2">
-          Click this to manually trigger GPS (check console for logs)
+        
+        <div className="mb-2">
+          <label className="text-xs text-red-400 mb-1 block">Manual Override (if GPS wrong):</label>
+          <select 
+            onChange={(e) => {
+              const building = campus.buildings.find(b => b.id === e.target.value);
+              if (building) {
+                console.log('🔧 Manual override:', building.name);
+                setHasCounted(false);
+                countVisitorInBuilding(building);
+              }
+            }}
+            className="w-full px-2 py-1 text-xs bg-white/10 border border-red-500 rounded text-white"
+          >
+            <option value="">Select building manually</option>
+            {campus.buildings.map(b => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+        </div>
+        
+        <p className="text-xs text-red-400">
+          GPS detected wrong building? Select manually above
         </p>
       </div>
 
