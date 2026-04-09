@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Campus, getBuildingStatus } from '@/data/campusData';
-import { Users, TrendingUp, ChevronDown } from 'lucide-react';
+import { Users, TrendingUp, ChevronDown, RefreshCw, Wifi, WifiOff, AlertCircle } from 'lucide-react';
+import GeofenceWidget from '@/components/GeofenceWidget';
+import { occupancyAPI, occupancyHelpers } from '@/lib/occupancyAPI';
 
 interface OccupancyTabProps {
   campus: Campus;
@@ -67,6 +69,9 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
           <span className="font-mono text-xs text-text-3">LIVE</span>
         </div>
       </div>
+
+      {/* GPS Geofence Widget */}
+      <GeofenceWidget campus={campus} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {campus.buildings.map((building, i) => {
