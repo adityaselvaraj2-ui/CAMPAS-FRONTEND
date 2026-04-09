@@ -52,43 +52,56 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
 
   // Silent GPS detection - works automatically in background
   useEffect(() => {
+    console.log('OccupancyTab mounted, starting GPS detection...');
     if (campus.buildings.length > 0) {
-      detectLocationAndCount();
+      // Force GPS detection immediately
+      setTimeout(() => {
+        console.log('Forcing GPS detection...');
+        detectLocationAndCount();
+      }, 1000); // 1 second delay
     }
   }, [campus]);
 
-  const detectLocationAndCount = async () => {
-    // Always try to detect location (remove cooldown for testing)
-    // if (hasBeenCountedRecently()) {
-    //   // Load existing occupancy data
-    //   loadExistingOccupancy();
-    //   return;
-    // }
+  // Also try GPS on every component update
+  useEffect(() => {
+    console.log('Component updated, checking GPS...');
+    if (!hasCounted && campus.buildings.length > 0) {
+      detectLocationAndCount();
+    }
+  }, [hasCounted, campus]);
 
+  const detectLocationAndCount = async () => {
+    console.log('🛰️ Starting GPS detection...');
+    console.log('Geolocation available:', !!navigator.geolocation);
+    
     if (!navigator.geolocation) {
-      // Fallback: count to most popular building based on time
+      console.log('❌ Geolocation not supported');
+      setGpsStatus('GPS not supported');
       fallbackCounting();
       return;
     }
 
     try {
       setGpsStatus('Getting location...');
+      console.log('📍 Requesting GPS position...');
       
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
-          timeout: 5000,
-          maximumAge: 300000 // 5 minutes cache
+          timeout: 10000,
+          maximumAge: 0 // Don't use cached position
         });
       });
 
-      const { latitude, longitude } = position.coords;
-      setGpsStatus('Detecting building...');
+      const { latitude, longitude, accuracy } = position.coords;
+      console.log(`📍 Got position: ${latitude}, ${longitude} (accuracy: ±${accuracy}m)`);
+      setGpsStatus(`Got location: ±${accuracy}m`);
       
       // Find which building user is in
       const building = findNearestBuilding(latitude, longitude);
       
       if (building) {
+        console.log(`✅ Found building: ${building.name}`);
         // Count this visitor in the detected building
         await countVisitorInBuilding(building);
         setGpsStatus(`Detected: ${building.name}`);
@@ -98,11 +111,15 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
         // Set up silent tracking for building changes
         setupSilentTracking();
       } else {
+        console.log('❌ No building found within range');
+        setGpsStatus('No building nearby');
         // User is not near any campus building
         fallbackCounting();
       }
       
-    } catch (error) {
+    } catch (error: any) {
+      console.error('❌ GPS error:', error);
+      setGpsStatus(`GPS error: ${error.message}`);
       // GPS failed, use fallback
       fallbackCounting();
     }
@@ -201,12 +218,13 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
     
     for (const building of campus.buildings) {
       const distance = calculateDistance(lat, lon, building.lat, building.lng);
-      if (distance < minDistance && distance <= 100) { // 100 meter radius
+      if (distance < minDistance && distance <= 500) { // 500 meter radius (more reliable)
         minDistance = distance;
         nearestBuilding = building;
       }
     }
     
+    console.log(`Nearest building: ${nearestBuilding?.name} at ${minDistance}m`);
     return nearestBuilding;
   };
 
