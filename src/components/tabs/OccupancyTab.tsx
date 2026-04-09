@@ -138,7 +138,6 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
         body: JSON.stringify({
           sessionId: visitorId,
           buildingId: building.id,
-          action: 'enter',
           campus: campus.id.toUpperCase()
         })
       });
