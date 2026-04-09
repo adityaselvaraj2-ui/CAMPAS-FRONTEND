@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MapPin, Navigation, Battery, Wifi, WifiOff, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
-import { useGeofence } from '@/hooks/useGeofence';
-import { Campus } from '@/data/campusData';
+import { useGeofence } from '../hooks/useGeofence';
+import { Campus } from '../data/campusData';
 
 interface GeofenceWidgetProps {
   campus: Campus | null;

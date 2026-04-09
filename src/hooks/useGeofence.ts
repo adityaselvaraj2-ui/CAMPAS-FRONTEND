@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Campus, Building } from '@/data/campusData';
+import { Campus, Building } from '../data/campusData';
 
 interface GeofenceConfig {
   radius: number; // meters
