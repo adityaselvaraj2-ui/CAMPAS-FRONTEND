@@ -28,6 +28,110 @@ function getCrowdLabel(ratio: number): { label: string; color: string } {
 const OccupancyTab = ({ campus }: OccupancyTabProps) => {
   const [occupancy, setOccupancy] = useState<Record<string, number>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [isTracking, setIsTracking] = useState(false);
+  const [currentBuilding, setCurrentBuilding] = useState<string | null>(null);
+  const [gpsStatus, setGpsStatus] = useState('Click to enable GPS tracking');
+
+  // GPS tracking functions
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371000; // Earth's radius in meters
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // Distance in meters
+  };
+
+  const checkGeofence = (lat: number, lon: number): string | null => {
+    for (const building of campus.buildings) {
+      const distance = calculateDistance(lat, lon, building.lat, building.lng);
+      if (distance <= 50) { // 50 meters radius
+        return building.name;
+      }
+    }
+    return null;
+  };
+
+  const startGpsTracking = async () => {
+    if (!navigator.geolocation) {
+      setGpsStatus('GPS not supported by your browser');
+      return;
+    }
+
+    setIsTracking(true);
+    setGpsStatus('Requesting GPS permission...');
+
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
+        });
+      });
+
+      const { latitude, longitude, accuracy } = position;
+      setGpsStatus(`GPS accuracy: ±${Math.round(accuracy)}m`);
+
+      // Check which building the user is in
+      const building = checkGeofence(latitude, longitude);
+      if (building) {
+        setCurrentBuilding(building);
+        setGpsStatus(`You're in ${building}`);
+        
+        // Update occupancy (mock for now)
+        const newOccupancy = { ...occupancy };
+        const buildingId = campus.buildings.find(b => b.name === building)?.id;
+        if (buildingId) {
+          newOccupancy[buildingId] = (newOccupancy[buildingId] || 0) + 1;
+          setOccupancy(newOccupancy);
+        }
+      } else {
+        setCurrentBuilding(null);
+        setGpsStatus('Outside campus buildings');
+      }
+
+      // Set up periodic updates
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const building = checkGeofence(pos.coords.latitude, pos.coords.longitude);
+          if (building !== currentBuilding) {
+            setCurrentBuilding(building);
+            setGpsStatus(building ? `You're in ${building}` : 'Outside campus buildings');
+          }
+        },
+        (error) => {
+          setGpsStatus(`GPS error: ${error.message}`);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
+        }
+      );
+
+      // Store watch ID for cleanup
+      return () => {
+        navigator.geolocation.clearWatch(watchId);
+      };
+
+    } catch (error: any) {
+      setGpsStatus(`GPS error: ${error.message}`);
+      setIsTracking(false);
+    }
+  };
+
+  const stopGpsTracking = () => {
+    setIsTracking(false);
+    setGpsStatus('GPS tracking stopped');
+    setCurrentBuilding(null);
+  };
 
   const generate = useCallback(() => {
     const hour = new Date().getHours();
@@ -68,18 +172,37 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
         </div>
       </div>
 
-      {/* GPS Geofence Widget - Test Version */}
+      {/* GPS Geofence Widget - Functional Version */}
       <div className="glass-card p-4 border-2 border-blue-500">
-        <h3 className="font-bold text-blue-400 mb-2">🧭 GPS DETECTION TEST</h3>
+        <h3 className="font-bold text-blue-400 mb-2">🧭 GPS DETECTION</h3>
         <p className="text-sm text-muted-foreground mb-3">
-          If you can see this box, the GPS system is working!
+          {gpsStatus}
         </p>
-        <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
-          ENABLE AUTO CHECK-IN
+        <button 
+          onClick={isTracking ? stopGpsTracking : startGpsTracking}
+          className={`px-4 py-2 rounded-lg transition-colors ${
+            isTracking 
+              ? 'bg-red-500 text-white hover:bg-red-600' 
+              : 'bg-blue-500 text-white hover:bg-blue-600'
+          }`}
+        >
+          {isTracking ? 'STOP TRACKING' : 'ENABLE AUTO CHECK-IN'}
         </button>
-        <p className="text-xs text-muted-foreground mt-2">
-          Campus: {campus.name}
-        </p>
+        <div className="mt-3 space-y-1">
+          <p className="text-xs text-muted-foreground">
+            Campus: {campus.name}
+          </p>
+          {currentBuilding && (
+            <p className="text-xs text-green-400 font-medium">
+              📍 Current Location: {currentBuilding}
+            </p>
+          )}
+          {isTracking && (
+            <p className="text-xs text-blue-400">
+              🛰️ Tracking active...
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
