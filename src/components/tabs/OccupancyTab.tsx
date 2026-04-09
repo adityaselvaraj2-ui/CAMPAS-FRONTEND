@@ -111,45 +111,87 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
   const countVisitorInBuilding = async (building: any) => {
     const visitorId = getVisitorId();
     
-    // Simple local storage approach for now
     try {
-      // Get current occupancy from local storage
-      const storageKey = `occupancy_${campus.id}`;
-      let currentOccupancy = JSON.parse(localStorage.getItem(storageKey) || '{}');
-      
-      // Add this visitor to the building
-      currentOccupancy[building.id] = (currentOccupancy[building.id] || 0) + 1;
-      
-      // Save to local storage
-      localStorage.setItem(storageKey, JSON.stringify(currentOccupancy));
-      
-      // Update state
-      setOccupancy(currentOccupancy);
-      setHasCounted(true);
-      setGpsStatus(`Counted in ${building.name}`);
-      
-      console.log(`Visitor counted in ${building.name} via local storage`);
-      
-      // Mark as counted
-      localStorage.setItem('lastCounted', Date.now().toString());
-      
+      // Call backend to count this visitor (database should work now)
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/occupancy/checkin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId: visitorId,
+          buildingId: building.id,
+          action: 'enter',
+          campus: campus.id.toUpperCase()
+        })
+      });
+
+      if (response.ok) {
+        // Mark as counted
+        localStorage.setItem('lastCounted', Date.now().toString());
+        setHasCounted(true);
+        setGpsStatus(`Counted in ${building.name}`);
+        
+        // Load updated occupancy from database
+        loadExistingOccupancy();
+        
+        console.log(`Visitor counted in ${building.name} via database`);
+      } else {
+        console.log('Database failed, using local storage');
+        // Fallback to local storage
+        await countVisitorInLocalStorage(building);
+      }
     } catch (error) {
-      console.error('Failed to count visitor:', error);
-      setGpsStatus('Counting failed');
+      console.log('Backend error, using local storage');
+      // Fallback to local storage
+      await countVisitorInLocalStorage(building);
     }
+  };
+
+  const countVisitorInLocalStorage = async (building: any) => {
+    // Local storage fallback
+    const storageKey = `occupancy_${campus.id}`;
+    let currentOccupancy = JSON.parse(localStorage.getItem(storageKey) || '{}');
+    
+    currentOccupancy[building.id] = (currentOccupancy[building.id] || 0) + 1;
+    
+    localStorage.setItem(storageKey, JSON.stringify(currentOccupancy));
+    setOccupancy(currentOccupancy);
+    setHasCounted(true);
+    setGpsStatus(`Counted in ${building.name} (local)`);
+    
+    localStorage.setItem('lastCounted', Date.now().toString());
   };
 
   const loadExistingOccupancy = async () => {
     try {
-      // Load from local storage instead of backend
+      // Try database first (RLS should be fixed now)
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/occupancy/current?campus=${campus.id.toUpperCase()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setOccupancy(data.occupancy || {});
+        setGpsStatus('Database loaded');
+        console.log('Loaded from database:', data.occupancy);
+      } else {
+        // Fallback to local storage
+        loadFromLocalStorage();
+      }
+    } catch (error) {
+      // Fallback to local storage
+      console.log('Database error, using local storage');
+      loadFromLocalStorage();
+    }
+  };
+
+  const loadFromLocalStorage = () => {
+    try {
       const storageKey = `occupancy_${campus.id}`;
       const storedOccupancy = JSON.parse(localStorage.getItem(storageKey) || '{}');
       setOccupancy(storedOccupancy);
       setGpsStatus('Local data loaded');
     } catch (error) {
-      // Fallback to empty data
       setOccupancy({});
-      setGpsStatus('No local data');
+      setGpsStatus('No data available');
     }
   };
 
