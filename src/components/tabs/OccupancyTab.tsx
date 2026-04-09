@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Campus, getBuildingStatus } from '../../data/campusData';
-import { Users, TrendingUp, ChevronDown, RefreshCw, Wifi, WifiOff, AlertCircle } from 'lucide-react';
-import GeofenceWidget from '../GeofenceWidget';
-import { occupancyAPI, occupancyHelpers } from '../../lib/occupancyAPI';
+import { Users, TrendingUp, ChevronDown } from 'lucide-react';
 
 interface OccupancyTabProps {
   campus: Campus;
@@ -70,10 +68,19 @@ const OccupancyTab = ({ campus }: OccupancyTabProps) => {
         </div>
       </div>
 
-      {/* GPS Geofence Widget */}
-      <GeofenceWidget campus={campus} onBuildingChange={(data) => {
-        console.log('Building changed:', data);
-      }} />
+      {/* GPS Geofence Widget - Test Version */}
+      <div className="glass-card p-4 border-2 border-blue-500">
+        <h3 className="font-bold text-blue-400 mb-2">🧭 GPS DETECTION TEST</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          If you can see this box, the GPS system is working!
+        </p>
+        <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+          ENABLE AUTO CHECK-IN
+        </button>
+        <p className="text-xs text-muted-foreground mt-2">
+          Campus: {campus.name}
+        </p>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {campus.buildings.map((building, i) => {
